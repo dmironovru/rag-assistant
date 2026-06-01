@@ -191,18 +191,39 @@ info "Бэкенд запущен (PID: $BACKEND_PID) ✅"
 # === Запуск фронтенда ===
 step "Запуск Next.js-фронтенда..."
 cd "$FRONTEND_DIR"
+
+# 🔧 Чистим кэш, чтобы избежать ошибок "required-server-files.json"
+warn "Очистка кэша Next.js..."
+rm -rf .next
+
+# 🔧 Гарантируем установку зависимостей (локально, а не глобально!)
+if [ ! -d "node_modules" ]; then
+    step "Установка зависимостей npm (это может занять время)..."
+    npm install --silent
+fi
+
 export RAG_API_URL="http://localhost:$BACKEND_PORT/api/search"
 export OLLAMA_URL="http://localhost:11434/api/generate"
 
+# Запускаем dev-сервер
 npm run dev > "$LOG_DIR/frontend.log" 2>&1 &
 FRONTEND_PID=$!
-sleep 3
 
-if ! kill -0 $FRONTEND_PID 2>/dev/null; then
-    error "Фронтенд не запустился! Смотри лог: $LOG_DIR/frontend.log"
-    tail -10 "$LOG_DIR/frontend.log"
-    exit 1
-fi
+# 🔍 Ждём, пока фронтенд ДЕЙСТВИТЕЛЬНО начнёт отвечать на запросы
+step "Ожидание готовности фронтенда..."
+for i in {1..30}; do  # 30 попыток по 1 сек = макс 30 сек ожидания
+    if curl -s "http://localhost:$FRONTEND_PORT" >/dev/null 2>&1; then
+        info "Фронтенд отвечает на порту $FRONTEND_PORT ✅"
+        break
+    fi
+    if [ $i -eq 30 ]; then
+        error "Фронтенд не запустился за 30 секунд! Смотри лог:"
+        tail -20 "$LOG_DIR/frontend.log"
+        cleanup
+    fi
+    sleep 1
+done
+
 info "Фронтенд запущен (PID: $FRONTEND_PID) ✅"
 
 # === Финальное сообщение ===
