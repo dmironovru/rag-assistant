@@ -1,0 +1,35 @@
+# === Node / Next.js ===
+node_modules/
+.next/
+out/
+*.log
+
+# === Go ===
+*.exe
+*.test
+coverage.out
+/bin/
+/vendor/
+backend/cache/
+backend/ingest
+backend/main.go
+backend/main.go.save
+backend/server.log
+
+# === Docker ===
+*.dockerenv
+
+# === Env / Secrets ===
+.env
+.env.local
+.env*.local
+
+# === IDE / OS ===
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# === Storage ===
+storage/uploads/

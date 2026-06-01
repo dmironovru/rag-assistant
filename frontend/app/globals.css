@@ -1,0 +1,265 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  /* Основной шрифт уже задан в layout.tsx через manrope.className */
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* Кастомный скроллбар */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+::-webkit-scrollbar-thumb {
+  background: #764C94;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8b6ba8;
+}
+
+/* Canvas */
+canvas {
+  display: block;
+}
+
+/* 🔥 КРИТИЧЕСКИ ВАЖНО: отключаем перехват touch-событий на мобильных */
+@media (max-width: 768px) {
+  canvas {
+    touch-action: none !important;
+    pointer-events: none !important;
+  }
+  
+  /* Дополнительная защита для всех 3D-контейнеров */
+  .absolute.inset-0 canvas,
+  [class*="pointer-events"] canvas {
+    touch-action: none !important;
+    pointer-events: none !important;
+  }
+  
+  /* Обеспечиваем скролл на body */
+  body {
+    touch-action: pan-y pinch-zoom !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+}
+
+/* Анимации */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeIn 0.8s ease-out;
+}
+
+/* 🔥 Мерцание звёзд */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+.animate-twinkle {
+  animation: twinkle 2.5s ease-in-out infinite;
+}
+
+/* 👇 FIX: Используем Manrope, так как Ubuntu удалён */
+.font-tech {
+  font-family: var(--font-manrope), sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* Кнопка "Обо мне" — Фиолетовая с неоновым свечением */
+.btn-primary {
+  padding: 0.75rem 2rem;
+  background-color: #764C94;
+  color: #ffffff;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-family: var(--font-manrope), sans-serif; /* Читаемый шрифт для кнопки */
+  transition: all 0.3s ease;
+  box-shadow: 0 0 15px rgba(118, 76, 148, 0.5), 
+              0 0 30px rgba(118, 76, 148, 0.3);
+}
+
+.btn-primary:hover {
+  background-color: #8b6ba8;
+  transform: scale(1.05);
+  box-shadow: 0 0 25px rgba(118, 76, 148, 0.7), 
+              0 0 50px rgba(118, 76, 148, 0.4);
+}
+
+.btn-primary:active {
+  transform: scale(0.95);
+}
+
+/* Кнопка "Хочу сайт" — Белый контур */
+.btn-secondary {
+  padding: 0.75rem 2rem;
+  background-color: transparent;
+  border: 2px solid #ffffff;
+  color: #ffffff;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-family: var(--font-manrope), sans-serif;
+  transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+  background-color: #ffffff;
+  color: #0a0a0a;
+  transform: scale(1.05);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+}
+
+.btn-secondary:active {
+  transform: scale(0.95);
+}
+
+/* Эффекты */
+.glass {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 1rem;
+}
+
+.glow {
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.5),
+              0 0 40px rgba(0, 212, 255, 0.3);
+}
+.glow-purple {
+  box-shadow: 0 0 20px rgba(118, 76, 148, 0.5),
+              0 0 40px rgba(118, 76, 148, 0.3);
+}
+
+/* Матовое стекло – ОЧЕНЬ ТЕМНОЕ, почти как фон */
+.glass-card {
+  /* Очень темный серый фон с 70% непрозрачности (почти черный) */
+  background: rgba(15, 15, 15, 0.85); 
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  /* Тонкая, едва заметная рамка для контура */
+  border: 1px solid rgba(255, 255, 255, 0.1); 
+  border-radius: 2rem;
+  padding: 2rem 1.5rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.9);
+}
+
+/* Адаптация для мобильных */
+@media (max-width: 768px) {
+  .glass-card {
+    padding: 1.5rem 1rem;
+    border-radius: 1.5rem;
+    backdrop-filter: blur(12px);
+    background: rgba(15, 15, 15, 0.9); /* Еще темнее на мобильном */
+  }
+}
+
+.glass-card h1,
+.glass-card p {
+  text-shadow: none;
+}
+
+@media (max-width: 480px) {
+  .glass-card {
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
+  }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.animate-blink {
+  animation: blink 0.8s step-end infinite;
+}
+
+
+/* Запрет выделения текста при взаимодействии с 3D-сценой */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Для canvas, чтобы при захвате не выделялось */
+canvas {
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: auto; /* сохраняем возможность взаимодействия */
+}
+
+
+/* кнопки админки */
+.admin-nav-item {
+  @apply flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-medium;
+}
+.admin-nav-item:hover {
+  @apply bg-white/10 text-white;
+}
+
+/* Гарантируем, что формы всегда поверх 3D-фона */
+#contacts input,
+#contacts textarea,
+#contacts button,
+#contacts label {
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+  position: relative;
+  z-index: 50 !important;
+}
+
+/* Запрещаем канвасу перехватывать события внутри формы */
+#contacts canvas {
+  pointer-events: none !important;
+}
+
+/* 👇 Оптимизация для LCP-секции */
+#section-hero {
+  content-visibility: auto;
+  contain-intrinsic-size: 100vh;
+}
+
+/* плавное появление 3D-сцены */
+
+@keyframes fadeInGlow {
+  0% {
+    opacity: 0;
+    filter: blur(10px) brightness(0.8);
+  }
+  50% {
+    opacity: 0.6;
+    filter: blur(4px) brightness(1);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0) brightness(1);
+  }
+}
+
+.animate-fadeInGlow {
+  animation: fadeInGlow 1.5s ease-out forwards;
+}
+
+

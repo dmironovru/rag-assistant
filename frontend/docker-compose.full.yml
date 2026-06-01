@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # PostgreSQL + pgvector
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: ragpass
+      POSTGRES_DB: rag_docs
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./rag-assistant/deploy/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - rag-net
+
+  # Go RAG API
+  rag-api:
+    build:
+      context: ./rag-assistant
+      dockerfile: deploy/Dockerfile.api
+    environment:
+      DB_CONN: postgres://rag:ragpass@postgres:5432/rag_docs
+      OLLAMA_URL: http://ollama:11434  # ← внутренний Docker-URL
+    depends_on:
+      - postgres
+    networks:
+      - rag-net
+
+  # Ollama (модели НЕ включены в образ — качаются при первом запуске)
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_models:/root/.ollama  # ← модели хранятся здесь, но не в репо
+    networks:
+      - rag-net
+    # Для GPU (NVIDIA):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # Next.js Frontend (твой блог)
+  frontend:
+    build:
+      context: .  # корень твоего Next.js проекта
+      dockerfile: Dockerfile
+    environment:
+      RAG_API_URL: http://rag-api:8080/api/search
+      OLLAMA_URL: http://ollama:11434/api/generate
+    ports:
+      - "3000:3000"
+    depends_on:
+      - rag-api
+      - ollama
+    networks:
+      - rag-net
+
+networks:
+  rag-net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  ollama_models:  # ← важный момент: модели НЕ коммитятся в Git

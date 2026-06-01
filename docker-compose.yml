@@ -1,0 +1,96 @@
+
+---
+
+### 🐳 `docker-compose.yml` (в корне)
+
+```yaml
+version: '3.8'
+
+services:
+  # === Фронтенд (твой блог) ===
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - RAG_API_URL=http://backend:8080/api/search
+      - OLLAMA_URL=http://ollama:11434/api/generate
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./storage/uploads:/app/storage/uploads:ro
+    networks:
+      - rag-net
+    restart: unless-stopped
+
+  # === Бэкенд (Go RAG) ===
+  backend:
+    build:
+      context: ./backend
+      dockerfile: deploy/Dockerfile.api
+    environment:
+      - DB_CONN=postgres://rag:ragpass@postgres:5432/rag_docs
+      - OLLAMA_URL=http://ollama:11434
+      - EMBED_MODEL=nomic-embed-text
+    volumes:
+      - ./backend/cache:/app/cache
+      - ./storage/uploads:/app/storage/uploads:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - rag-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # === PostgreSQL ===
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: ragpass
+      POSTGRES_DB: rag_docs
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/deploy/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - rag-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # === Ollama ===
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_models:/root/.ollama
+    networks:
+      - rag-net
+    restart: unless-stopped
+    # Для GPU:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+networks:
+  rag-net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  ollama_models:

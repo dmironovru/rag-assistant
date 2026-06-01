@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  # === Твой Next.js блог ===
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - RAG_API_URL=http://rag-api:8080/api/search
+      - OLLAMA_URL=http://ollama:11434/api/generate
+      - LLM_MODEL=${LLM_MODEL:-mistral:7b}
+    depends_on:
+      rag-api:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    networks:
+      - rag-net
+    restart: unless-stopped
+
+  # === Go RAG API ===
+  rag-api:
+    build:
+      context: ../rag-assistant  # путь к папке с Go-кодом
+      dockerfile: deploy/Dockerfile.api
+    environment:
+      - DB_CONN=postgres://rag:ragpass@postgres:5432/rag_docs
+      - OLLAMA_URL=http://ollama:11434
+      - EMBED_MODEL=${EMBED_MODEL:-nomic-embed-text}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - rag-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # === PostgreSQL + pgvector ===
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: ragpass
+      POSTGRES_DB: rag_docs
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../rag-assistant/deploy/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - rag-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # === Ollama (модели НЕ в репо!) ===
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_models:/root/.ollama  # ← модели хранятся здесь, но не в Git
+    networks:
+      - rag-net
+    # Для NVIDIA GPU раскомментируй:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    restart: unless-stopped
+
+networks:
+  rag-net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  ollama_models:  # ← ключевой момент: модели не коммитятся
