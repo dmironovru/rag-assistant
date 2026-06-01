@@ -1,35 +1,31 @@
-# === Node / Next.js ===
+# === Ollama & Models ===
+.ollama/
+*.bin
+*.gguf
+
+# === Backend Cache ===
+backend/cache/
+backend/ingest
+backend/*.log
+
+# === Frontend ===
 node_modules/
 .next/
 out/
 *.log
 
-# === Go ===
-*.exe
-*.test
-coverage.out
-/bin/
-/vendor/
-backend/cache/
-backend/ingest
-backend/main.go
-backend/main.go.save
-backend/server.log
+# === Logs ===
+logs/
+*.log
 
-# === Docker ===
-*.dockerenv
-
-# === Env / Secrets ===
+# === Environment ===
 .env
 .env.local
 .env*.local
 
-# === IDE / OS ===
-.vscode/
-.idea/
+# === OS & IDE ===
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/
 *.swp
-
-# === Storage ===
-storage/uploads/
