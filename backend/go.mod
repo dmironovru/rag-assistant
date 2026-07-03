@@ -3,6 +3,7 @@ module rag-assistant
 go 1.25.0
 
 require (
+	github.com/axgle/mahonia v0.0.0-20180208002826-3358181d7394
 	github.com/go-git/go-git/v5 v5.19.1
 	github.com/jackc/pgx/v5 v5.9.2
 	gopkg.in/yaml.v3 v3.0.1

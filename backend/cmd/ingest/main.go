@@ -1,121 +1,266 @@
 package main
 
 import (
-	"flag"
+	"bytes"
+	"context"
+	"fmt"
 	"log"
 	"os"
-	"path/filepath"
+	"os/exec"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
-	"rag-assistant/internal/chunker"
 	"rag-assistant/internal/embedder"
-	"rag-assistant/internal/fetcher"
-	"rag-assistant/internal/store"
 
+	"github.com/axgle/mahonia"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	DBConn     string   `yaml:"db_connection"`
-	OllamaURL  string   `yaml:"ollama_url"`
-	EmbedModel string   `yaml:"embed_model"`
-	Sources    []Source `yaml:"sources"`
-}
-
-type Source struct {
-	Name         string   `yaml:"name"`
-	Type         string   `yaml:"type"`
-	Repo         string   `yaml:"repo"`
-	Branch       string   `yaml:"branch"`
-	Paths        []string `yaml:"paths"`
-	URL          string   `yaml:"url"`
-	Format       string   `yaml:"format"`
-	Language     string   `yaml:"language"`
-	ChunkSize    int      `yaml:"chunk_size"`
-	ChunkOverlap int      `yaml:"chunk_overlap"`
+	DBConn     string `yaml:"db_connection"`
+	OllamaURL  string `yaml:"ollama_url"`
+	EmbedModel string `yaml:"embed_model"`
 }
 
 func main() {
-	configPath := flag.String("config", "config/sources.yaml", "Путь к конфигу")
-	filter := flag.String("filter", "", "Обработать только этот источник")
-	flag.Parse()
-
-	cfg, err := loadConfig(*configPath)
-	if err != nil {
-		log.Fatal("Ошибка загрузки конфига:", err)
+	if len(os.Args) < 2 {
+		log.Fatal("Usage: go run cmd/ingest/main.go <file_path>")
 	}
 
-	db, err := store.GetDB(cfg.DBConn)
+	filePath := os.Args[1]
+
+	cfg, err := loadConfig("config/sources.yaml")
 	if err != nil {
-		log.Fatal("Ошибка подключения к БД:", err)
+		log.Fatal("❌ Ошибка конфига:", err)
+	}
+
+	db, err := pgxpool.New(context.Background(), cfg.DBConn)
+	if err != nil {
+		log.Fatal("❌ Ошибка подключения к БД:", err)
 	}
 	defer db.Close()
 	log.Println("✅ Подключено к БД")
 
-	for _, src := range cfg.Sources {
-		if *filter != "" && src.Name != *filter {
+	log.Printf("📄 Индексация файла: %s", filePath)
+
+	text, err := extractText(filePath)
+	if err != nil {
+		log.Fatal("❌ Ошибка извлечения текста:", err)
+	}
+
+	text = convertToUTF8(text)
+	text = cleanText(text)
+
+	if len(text) < 10 {
+		log.Fatal("❌ Текст слишком короткий или пустой")
+	}
+
+	log.Printf("📝 Размер текста: %d символов", len(text))
+
+	// Разбивка по символам, а не по словам!
+	chunks := splitIntoChunksByChars(text, 300, 50)
+	log.Printf("📦 Создано %d чанков", len(chunks))
+
+	saved := 0
+	for i, chunk := range chunks {
+		if len(chunk) < 10 {
 			continue
 		}
 
-		log.Printf("📥 Обработка: %s", src.Name)
-
-		var documents []string
-
-		if src.Type == "github" {
-			// Конвертируем short format в полный URL
-			repoURL := src.Repo
-			if !strings.HasPrefix(repoURL, "https://") {
-				repoURL = "https://github.com/" + repoURL + ".git"
-			}
-
-			cacheDir := filepath.Join("cache", src.Name)
-			if err := fetcher.CloneOrPull(repoURL, src.Branch, cacheDir); err != nil {
-				log.Printf("⚠️ Ошибка клонирования %s: %v", src.Name, err)
-				continue
-			}
-
-			documents, err = fetcher.ReadFiles(cacheDir, src.Paths)
-			if err != nil {
-				log.Printf("⚠️ Ошибка чтения файлов %s: %v", src.Name, err)
-				continue
-			}
-			log.Printf("📄 %s: %d файлов", src.Name, len(documents))
+		emb, err := embedder.EmbedText(chunk, cfg.OllamaURL, cfg.EmbedModel)
+		if err != nil {
+			log.Printf("⚠️ Ошибка эмбеддинга чанка %d: %v", i, err)
+			continue
 		}
 
-		totalChunks := 0
-		for _, doc := range documents {
-			// Очищаем frontmatter из markdown
-			cleanDoc := cleanMarkdown(doc)
-			chunks := chunker.Split(cleanDoc, src.ChunkSize, src.ChunkOverlap)
-			totalChunks += len(chunks)
-
-			for i, chunk := range chunks {
-				embedding, err := embedder.EmbedText(chunk, cfg.OllamaURL, cfg.EmbedModel)
-				if err != nil {
-					log.Printf("⚠️ Ошибка эмбеддинга чанка %d: %v", i, err)
-					continue
-				}
-
-				if err := store.SaveChunk(db, src.Name, chunk, embedding); err != nil {
-					log.Printf("⚠️ Ошибка сохранения чанка %d: %v", i, err)
-					continue
-				}
-			}
+		_, err = db.Exec(context.Background(),
+			"INSERT INTO document_chunks (content, embedding, source) VALUES ($1, $2, $3)",
+			chunk, formatVector(emb), filePath,
+		)
+		if err != nil {
+			log.Printf("⚠️ Ошибка сохранения чанка %d: %v", i, err)
+			continue
 		}
+		saved++
 
-		log.Printf("✅ %s: готово (%d чанков)", src.Name, totalChunks)
+		if saved%50 == 0 {
+			log.Printf("✅ Сохранено %d/%d чанков", saved, len(chunks))
+		}
 	}
 
-	log.Println("🎉 Все источники обработаны!")
+	log.Printf("🎉 Индексация завершена! Сохранено %d/%d чанков", saved, len(chunks))
 }
 
-func cleanMarkdown(content string) string {
-	// Убираем frontmatter (--- ... ---)
-	parts := strings.SplitN(content, "---", 3)
-	if len(parts) >= 3 {
-		return strings.TrimSpace(parts[2])
+func extractText(filePath string) (string, error) {
+	ext := strings.ToLower(filePath[strings.LastIndex(filePath, "."):])
+
+	switch ext {
+	case ".pdf":
+		return extractTextFromPDF(filePath)
+	case ".doc", ".docx":
+		return extractTextFromDOC(filePath)
+	default:
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return "", err
+		}
+		return string(data), nil
 	}
-	return content
+}
+
+func extractTextFromPDF(filePath string) (string, error) {
+	if _, err := exec.LookPath("pdftotext"); err != nil {
+		return "", fmt.Errorf("pdftotext not installed: %w", err)
+	}
+
+	// Вариант 1: с сохранением layout (-layout)
+	cmd := exec.Command("pdftotext", "-layout", "-enc", "UTF-8", filePath, "-")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err == nil {
+		text := stdout.String()
+		if len(strings.TrimSpace(text)) > 100 {
+			return text, nil
+		}
+	}
+
+	// Вариант 2: без layout (-raw)
+	cmd = exec.Command("pdftotext", "-raw", "-enc", "UTF-8", filePath, "-")
+	stdout.Reset()
+	stderr.Reset()
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err == nil {
+		text := stdout.String()
+		if len(strings.TrimSpace(text)) > 100 {
+			return text, nil
+		}
+	}
+
+	// Вариант 3: с фиксом ширины (-fixed 10)
+	cmd = exec.Command("pdftotext", "-fixed", "10", "-enc", "UTF-8", filePath, "-")
+	stdout.Reset()
+	stderr.Reset()
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err == nil {
+		text := stdout.String()
+		if len(strings.TrimSpace(text)) > 100 {
+			return text, nil
+		}
+	}
+
+	return "", fmt.Errorf("extracted text is too short (probably scanned PDF or encrypted)")
+}
+
+func extractTextFromDOC(filePath string) (string, error) {
+	if _, err := exec.LookPath("catdoc"); err == nil {
+		cmd := exec.Command("catdoc", filePath)
+		var stdout bytes.Buffer
+		cmd.Stdout = &stdout
+		if err := cmd.Run(); err == nil {
+			text := stdout.String()
+			if len(strings.TrimSpace(text)) > 10 {
+				return text, nil
+			}
+		}
+	}
+
+	if _, err := exec.LookPath("antiword"); err == nil {
+		cmd := exec.Command("antiword", filePath)
+		var stdout bytes.Buffer
+		cmd.Stdout = &stdout
+		if err := cmd.Run(); err == nil {
+			text := stdout.String()
+			if len(strings.TrimSpace(text)) > 10 {
+				return text, nil
+			}
+		}
+	}
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+// ============================================================
+// РАЗБИВКА НА ЧАНКИ ПО СИМВОЛАМ
+// ============================================================
+func splitIntoChunksByChars(text string, size int, overlap int) []string {
+	if len(text) == 0 {
+		return []string{}
+	}
+
+	var chunks []string
+	textRunes := []rune(text)
+	length := len(textRunes)
+
+	step := size - overlap
+	if step <= 0 {
+		step = size
+	}
+
+	for i := 0; i < length; i += step {
+		end := i + size
+		if end > length {
+			end = length
+		}
+		chunk := string(textRunes[i:end])
+		if len(strings.TrimSpace(chunk)) > 0 {
+			chunks = append(chunks, chunk)
+		}
+	}
+
+	return chunks
+}
+
+func convertToUTF8(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+	decoder := mahonia.NewDecoder("windows-1251")
+	if decoder != nil {
+		converted := decoder.ConvertString(s)
+		if utf8.ValidString(converted) {
+			return converted
+		}
+	}
+	return strings.ToValidUTF8(s, " ")
+}
+
+func cleanText(text string) string {
+	var result strings.Builder
+	for _, r := range text {
+		if r == utf8.RuneError {
+			result.WriteRune(' ')
+		} else if unicode.IsPrint(r) || unicode.IsSpace(r) {
+			result.WriteRune(r)
+		} else {
+			result.WriteRune(' ')
+		}
+	}
+	return result.String()
+}
+
+func formatVector(v []float32) string {
+	var b strings.Builder
+	b.WriteString("[")
+	for i, f := range v {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString(fmt.Sprintf("%.6f", f))
+	}
+	b.WriteString("]")
+	return b.String()
 }
 
 func loadConfig(path string) (*Config, error) {

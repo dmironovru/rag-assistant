@@ -9,6 +9,8 @@ interface Message {
   context?: string[];
 }
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080';
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -39,25 +41,39 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/ask', {
+      const response = await fetch(`${BACKEND_URL}/api/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: input }),
+        body: JSON.stringify({ question: input }),
       });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
 
       const data = await response.json();
       
+      const sources = data.sources || [];
+      const contextStrings = sources.map((source: any) => {
+        if (typeof source === 'string') return source;
+        if (source && typeof source === 'object') {
+          return source.source || source.path || source.filename || JSON.stringify(source);
+        }
+        return String(source);
+      });
+
       const assistantMessage: Message = {
         role: 'assistant',
         content: data.answer || 'Не удалось получить ответ',
-        context: data.context,
+        context: contextStrings,
       };
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error('Error:', error);
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Ошибка соединения с сервером. Убедитесь, что RAG Assistant запущен на порту 8081.',
+        content: `❌ Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`,
       }]);
     } finally {
       setIsLoading(false);
@@ -80,22 +96,30 @@ export default function Home() {
     formData.append('file', file);
 
     try {
-      const response = await fetch('/api/upload', {
+      const response = await fetch(`${BACKEND_URL}/api/upload`, {
         method: 'POST',
         body: formData,
       });
 
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
       const data = await response.json();
       
+      const chunkCount = data.chunks ?? 0;
+      const filename = data.filename || file.name;
+
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: `✅ Файл "${data.filename}" загружен и проиндексирован (${data.chunks} чанков). Теперь можно задавать вопросы по его содержимому!`,
+        content: `✅ Файл "${filename}" загружен и проиндексирован (${chunkCount} чанков). Теперь можно задавать вопросы по его содержимому!`,
       }]);
     } catch (error) {
       console.error('Upload error:', error);
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: '❌ Ошибка загрузки файла. Убедитесь, что сервер запущен.',
+        content: `❌ Ошибка загрузки файла: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`,
       }]);
     } finally {
       setIsUploading(false);
@@ -119,7 +143,7 @@ export default function Home() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".txt,.md,.go"
+            accept=".txt,.md,.go,.pdf,.docx,.doc,.json,.yaml,.yml,.csv,.xml"
             onChange={handleFileUpload}
             className="hidden"
           />
@@ -141,10 +165,10 @@ export default function Home() {
                 <div className="whitespace-pre-wrap">{message.content}</div>
                 {message.context && message.context.length > 0 && (
                   <details className="mt-2 text-xs text-gray-400">
-                    <summary>Источники</summary>
+                    <summary>Источники ({message.context.length})</summary>
                     <ul className="mt-1 pl-4 space-y-1">
                       {message.context.map((ctx, i) => (
-                        <li key={i} className="break-all">{ctx.substring(0, 100)}...</li>
+                        <li key={i} className="break-all">{ctx}</li>
                       ))}
                     </ul>
                   </details>

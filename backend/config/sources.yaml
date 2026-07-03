@@ -1,39 +1,4 @@
-# БД (используем ту же, что и в rag-assistant)
-db_connection: "postgres://todo_user:todo123321odot@localhost:5432/todo_db"
-
-# Ollama
+db_connection: "postgres://rag:ragpass@localhost:5432/rag_docs"
 ollama_url: "http://localhost:11434"
-embed_model: "mistral:7b"
-
-# Источники документов
-sources:
-  - name: react
-    type: github
-    repo: reactjs/react.dev
-    branch: main
-    paths:
-      - "src/content/reference/react"
-      - "src/content/learn"
-    language: ru
-    chunk_size: 500
-    chunk_overlap: 100
-
-  - name: nextjs
-    type: github
-    repo: vercel/next.js
-    branch: canary
-    paths:
-      - "docs"
-    language: ru
-    chunk_size: 500
-    chunk_overlap: 100
-
-  - name: typescript
-    type: github
-    repo: microsoft/TypeScript-Website
-    branch: v2
-    paths:
-      - "packages/documentation/copy/en"
-    language: ru
-    chunk_size: 500
-    chunk_overlap: 100
+embed_model: "nomic-embed-text"
+generate_model: "mistral:7b"
