@@ -1,26 +1,27 @@
-#  RAG Portfolio — AI-ассистент по документации
+# RAG Assistant — AI-ассистент по документам
 
 [![Go](https://img.shields.io/badge/Go-1.23-blue.svg)](https://go.dev/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue.svg)](https://www.postgresql.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-> **Полностью локальный AI-помощник**, который отвечает на вопросы по технической документации (React, Next.js, TypeScript).  
-> Использует архитектуру **RAG (Retrieval-Augmented Generation)**: векторный поиск по документации + генерация ответов через локальную языковую модель. Никаких облачных API, все данные остаются на вашем компьютере.
+> **Полностью локальный AI-помощник**, который отвечает на вопросы по вашим документам (TXT, PDF, DOC).  
+> Использует архитектуру **RAG (Retrieval-Augmented Generation)**: векторный поиск + генерация ответов через локальную LLM.  
+> **Никаких облачных API** — все данные остаются на вашем компьютере.
 
- **Демо:** `git clone` → `./start.sh` → чат работает  
- **Репозиторий:** [github.com/dmironovru/rag-portfolio](https://github.com/dmironovru/rag-portfolio)
+🎯 **Демо:** `git clone` → `./start.sh` → чат работает  
+📦 **Репозиторий:** [github.com/dmironovru/rag-assistant](https://github.com/dmironovru/rag-assistant)
 
 ---
 
-## 🎯 Возможности
+## ✨ Возможности
 
-- ✅ **Автоматическая индексация** документации из официальных репозиториев GitHub
-- ✅ **Семантический поиск** через PostgreSQL + pgvector (векторные эмбеддинги)
-- ✅ **Локальная генерация ответов** через Ollama (`mistral:7b`, `nomic-embed-text`)
-- ✅ **Чат-интерфейс** на Next.js 16 с тёмной темой и подсветкой источников
-- ✅ **Одна команда для запуска**: `./start.sh` поднимает всё окружение
-- ✅ **Полностью приватно**: работает без интернета после первоначальной настройки
+- 📄 **Загрузка документов** — TXT, PDF, DOC/DOCX через интерфейс
+- 🔍 **Векторный поиск** — PostgreSQL + pgvector для семантического поиска
+- 🧠 **Локальный AI** — Ollama с моделями `nomic-embed-text` и `mistral:7b`
+- 💬 **Чат-интерфейс** — Next.js 16 с тёмной темой и источниками ответов
+- 🚀 **Одна команда** — `./start.sh` поднимает всё окружение
+- 🔒 **Полностью приватно** — работает без интернета после настройки
 
 ---
 
@@ -35,41 +36,39 @@
                                  │
                     ┌────────────▼────────────┐
                     │   PostgreSQL + pgvector │
-                    │   ~1800 чанков доков    │
-                    └─────────────────────────
+                    │   Векторные эмбеддинги  │
+                    └─────────────────────────┘
 ```
 
-### Компоненты
 | Компонент | Технология | Назначение |
 |-----------|-----------|------------|
-| **Frontend** | Next.js 16, React 19, Tailwind CSS | Чат-интерфейс, отправка вопросов, отображение ответов |
-| **Backend** | Go 1.23, `chi`, `pgx`, `pgvector` | Векторный поиск, обработка запросов, управление чанками |
-| **Embeddings** | Ollama + `nomic-embed-text` | Преобразование текста в векторы для поиска |
-| **LLM** | Ollama + `mistral:7b` | Генерация связных ответов на основе найденных чанков |
-| **Database** | PostgreSQL 16 + pgvector | Хранение чанков документации и векторных эмбеддингов |
+| **Frontend** | Next.js 16, React 19, Tailwind | Чат-интерфейс, загрузка файлов |
+| **Backend** | Go 1.23, `pgx`, `pgvector` | Векторный поиск, API, индексация |
+| **Embeddings** | Ollama + `nomic-embed-text` | Преобразование текста в векторы |
+| **LLM** | Ollama + `mistral:7b` | Генерация ответов на основе контекста |
+| **Database** | PostgreSQL 16 + pgvector | Хранение чанков и эмбеддингов |
 
 ---
 
-## 🚀 Быстрый старт (рекомендуемый)
+## 🚀 Быстрый старт
 
 ### Требования
-| Компонент | Версия | Как проверить |
-|-----------|--------|--------------|
+
+| Компонент | Версия | Проверка |
+|-----------|--------|----------|
 | 🐹 Go | 1.22+ | `go version` |
-|  Node.js | 20+ | `node --version` |
+| 📦 Node.js | 20+ | `node --version` |
 | 🐘 PostgreSQL | 16 + pgvector | `psql --version` |
 | 🦙 Ollama | последняя | `ollama --version` |
 
->  **Не установлен Ollama?**  
-> ```bash
-> curl -fsSL https://ollama.com/install.sh | sh
-> ```
+> **Нет Ollama?** Установи: `curl -fsSL https://ollama.com/install.sh | sh`
 
 ### Запуск
+
 ```bash
 # 1. Клонируй репозиторий
-git clone https://github.com/dmironovru/rag-portfolio.git
-cd rag-portfolio
+git clone https://github.com/dmironovru/rag-assistant.git
+cd rag-assistant
 
 # 2. Запусти всё одной командой
 ./start.sh
@@ -78,161 +77,180 @@ cd rag-portfolio
 🌐 http://localhost:3000
 ```
 
-### ⏱️ Что делает `./start.sh` при первом запуске?
-1.  ✅ Проверяет наличие зависимостей (Go, Node, PostgreSQL, Ollama)
-2.  ⬇️ Скачивает ИИ-модели (`~4.5 ГБ`), если их нет
-3.  🗄️ Создаёт базу данных `rag_docs` и таблицы
-4.  🚀 Запускает Ollama, Go-бэкенд и Next.js-фронтенд
-5.  💡 Выводит ссылки и логи, корректно останавливается по `Ctrl+C`
+### ⏱️ Что делает `./start.sh`
 
-> ⏳ **Первый запуск занимает 10-15 минут** (скачивание моделей). Повторные запуски — ~30 секунд.
+1. ✅ Проверяет зависимости (Go, Node, PostgreSQL, Ollama)
+2. ⬇️ Скачивает AI-модели (~4.5 ГБ), если их нет
+3. 🗄️ Создаёт базу данных `rag_docs` и таблицы
+4. 🚀 Запускает Ollama, Go-бэкенд и Next.js-фронтенд
+5. 💡 Показывает логи и ссылки
 
-### 🔍 Проверка работы
-1.  Открой [http://localhost:3000](http://localhost:3000)
-2.  В чате задай вопрос:  
-    `что такое useEffect в React и как правильно указывать зависимости?`
-3.  Подожди ~5-15 секунд
-4.  ✅ Получи связный ответ с цитатами из документации и ссылками на источники
-
-
-### 📸 Как это выглядит
-
-![Демонстрация работы чата](docs/demo-screenshot.png)
-
-*Пример: вопрос про `useEffect` → ответ с цитатами из официальной документации React и ссылками на источники*
+> ⏳ **Первый запуск:** 10–15 минут (скачивание моделей)  
+> ⚡ **Повторные запуски:** ~30 секунд
 
 ---
 
-## 🛠️ Ручная настройка (если `./start.sh` не подходит)
+## 📚 Демо-данные
 
-### 1. Запусти Ollama и скачай модели
+В репозитории есть демо-файл для тестирования:
+
+- **Гарри Поттер и Тайная комната** (русский перевод)  
+  📂 `backend/storage/uploads/garri-potter-i-tajnaya-komnata.txt`
+
+### Как использовать
+
+1. Запусти систему: `./start.sh`
+2. Открой `http://localhost:3000`
+3. Нажми **"📄 Загрузить файл"**
+4. Выбери файл из папки `backend/storage/uploads/`
+5. Задавай вопросы, например:
+   - _"Кто такой Гарри Поттер?"_
+   - _"Что такое Тайная комната?"_
+   - _"Кто такой Добби?"_
+   - _"Кто такой Хагрид?"_
+
+---
+
+## 🧪 Проверка работы
+
 ```bash
+# Задать вопрос через curl
+curl -X POST http://localhost:8080/api/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Кто такой Добби?"}' | jq '.'
+```
+
+**Ожидаемый ответ:**
+```json
+{
+  "answer": "Добби - это домовик, слуга семьи Малфой.",
+  "sources": [
+    "./storage/uploads/garri-potter-i-tajnaya-komnata.txt (similarity: 0.85)",
+    ...
+  ]
+}
+```
+
+---
+
+## 🛠️ Ручная настройка
+
+Если `./start.sh` не подходит:
+
+```bash
+# 1. Запусти Ollama и скачай модели
 ollama serve
-# В другом окне:
 ollama pull nomic-embed-text
 ollama pull mistral:7b
-```
 
-### 2. Создай базу данных
-```bash
+# 2. Создай базу данных
 sudo -u postgres psql -c "CREATE DATABASE rag_docs;"
 sudo -u postgres psql -d rag_docs -c "CREATE EXTENSION IF NOT EXISTS vector;"
-# Инициализация таблиц:
-sudo -u postgres psql -d rag_docs -f backend/deploy/init.sql
-```
 
-### 3. Запусти сервисы в отдельных терминалах
-```bash
-# Терминал 1: Бэкенд
+# 3. Запусти бэкенд
 cd backend
 export DB_CONN="postgres://rag:ragpass@localhost:5432/rag_docs"
-export OLLAMA_URL="http://localhost:11434"
 go run cmd/server/main.go
 
-# Терминал 2: Фронтенд
+# 4. Запусти фронтенд (в другом терминале)
 cd frontend
 npm install
-export RAG_API_URL="http://localhost:8080/api/search"
 npm run dev
 ```
 
 ---
 
-## ⚙️ Настройка и конфигурация
+## 🔧 Конфигурация
 
 ### Переменные окружения
-Скопируй `.env.example` в `.env` и при необходимости измени значения:
+
+Создай `.env` в корне проекта:
+
 ```env
-POSTGRES_USER=rag
-POSTGRES_PASSWORD=ragpass
-POSTGRES_DB=rag_docs
+DB_CONN=postgres://rag:ragpass@localhost:5432/rag_docs
+OLLAMA_URL=http://localhost:11434
 EMBED_MODEL=nomic-embed-text
-LLM_MODEL=mistral:7b
+GENERATE_MODEL=mistral:7b
 ```
 
 ### Доступные модели
+
 | Модель | Размер | Назначение | Рекомендация |
 |--------|--------|-----------|-------------|
-| `nomic-embed-text` | ~270 MB | Эмбеддинги | ✅ По умолчанию |
-| `mistral:7b` | ~4.1 GB | Генерация ответов | ✅ По умолчанию |
-| `qwen2.5:7b` | ~4.2 GB | Лучшая поддержка русского | 🇷 Для вопросов на RU |
-| `phi3:3.8b` | ~2.3 GB | Быстрая, лёгкая | ⚡ Для слабых машин |
-
-**Смена модели:** измени `LLM_MODEL=...` в `.env` и перезапусти `./start.sh`.
+| `nomic-embed-text` | 274 MB | Эмбеддинги | ✅ По умолчанию |
+| `mistral:7b` | 4.1 GB | Генерация | ✅ По умолчанию |
+| `qwen2.5:7b` | 4.2 GB | Русский язык | 🇷 Для вопросов на RU |
+| `llama3.2:3b` | 2.0 GB | Быстрая | ⚡ Для слабых машин |
 
 ---
 
-## 📚 Заполнение базы знаний
-
-По умолчанию база пустая. Чтобы добавить документацию:
-```bash
-cd backend
-make ingest
-```
-Это загрузит и проиндексирует официальные доки React и Next.js из GitHub.  
-Для добавления своих источников отредактируй `backend/config/sources.yaml`.
-
----
-
-##  Частые вопросы
+## ❓ Частые вопросы
 
 | Проблема | Решение |
 |----------|---------|
-| `Порт 8080/3000 занят` | Скрипт предложит освободить порт автоматически (нажми `1`) |
-| `ENOENT: required-server-files.json` | Скрипт автоматически очищает `.next` кэш перед запуском |
-| `Ответы на английском` | Смени модель на `qwen2.5:7b` в `.env` |
-| `Генерация медленная` | Используй `phi3:3.8b` или включи GPU в настройках Ollama |
-| `Docker не скачивает образы` | Используй нативный запуск `./start.sh` (он стабильнее в РФ) |
+| **Порт 8080/3000 занят** | Скрипт предложит освободить порт (нажми `1`) |
+| **Ответы на английском** | Смени модель на `qwen2.5:7b` в `.env` |
+| **Медленная генерация** | Используй `llama3.2:3b` или включи GPU |
+| **PDF не читается** | Установи `poppler-utils`: `sudo apt install poppler-utils` |
+| **DOC не читается** | Установи `catdoc`: `sudo apt install catdoc` |
 
 ---
 
-## 📦 Структура проекта
+## 📁 Структура проекта
+
 ```
-rag-portfolio/
-├──  README.md                 # Документация
-── 📄 start.sh                  # Запуск всего проекта одной командой
-├──  deploy.sh                 # (Опционально) Docker-деплой
-├──  docker-compose.yml        # Конфигурация контейнеров
-├── 📁 backend/                  # Go-бэкенд (RAG API)
-│   ├── 📁 cmd/                  # Точки входа (server, ingest)
-│   ├── 📁 internal/             # Модули (chunker, embedder, fetcher, store)
-│   └──  Makefile              # Удобные команды
-── 📁 frontend/                 # Next.js-фронтенд (чат)
-    ├── 📁 app/                  # Роуты и API
-    └── 📄 package.json          # Зависимости
+rag-assistant/
+├── 📄 start.sh                 # Запуск одной командой
+├── 📄 stop.sh                  # Остановка всех сервисов
+├── 📁 backend/
+│   ├── 📁 cmd/
+│   │   ├── server/             # API сервер
+│   │   └── ingest/             # Индексация файлов
+│   ├── 📁 internal/
+│   │   ├── chunker/            # Разбивка на чанки
+│   │   ├── embedder/           # Эмбеддинги через Ollama
+│   │   └── store/              # Работа с БД
+│   ├── 📁 storage/uploads/     # Загруженные файлы
+│   └── 📄 config/sources.yaml  # Конфигурация
+├── 📁 frontend/
+│   ├── 📁 app/
+│   │   ├── api/ask/            # Эндпоинт вопросов
+│   │   ├── api/upload/         # Эндпоинт загрузки
+│   │   └── page.tsx            # Чат-интерфейс
+│   └── 📄 package.json
+└── 📄 README.md
 ```
 
-### 🔒 Что не попадает в репозиторий
+---
 
-Следующие папки добавлены в `.gitignore`, чтобы не раздувать репозиторий:
-- `~/.ollama/` — модели ИИ (~5 ГБ, хранятся локально у каждого пользователя)
-- `backend/cache/` — кэш загруженной документации
-- `node_modules/`, `.next/` — зависимости и билд Next.js
-- `logs/` — логи запуска
-- `.env` — чувствительные данные (пароли, ключи)
+## 🔒 Что НЕ попадает в репозиторий
 
-При клонировании репозитория эти папки создаются автоматически при первом запуске `./start.sh`.
+- `~/.ollama/` — модели AI (~5 ГБ)
+- `backend/cache/` — кэш документов
+- `node_modules/`, `.next/` — зависимости Next.js
+- `logs/` — логи
+- `.env` — секреты (пароли, ключи)
+
+Эти папки создаются автоматически при первом запуске `./start.sh`.
 
 ---
 
 ## 🤝 Вклад в проект
-1.  Форкни репозиторий
-2.  Создай ветку фичи: `git checkout -b feature/amazing`
-3.  Закоммить изменения: `git commit -m 'Add amazing feature'`
-4.  Запушь: `git push origin feature/amazing`
-5.  Открой Pull Request
 
----
-
-## 📄 Лицензия
-MIT. См. файл [LICENSE](LICENSE).
+1. Форкни репозиторий
+2. Создай ветку: `git checkout -b feature/amazing`
+3. Закоммить: `git commit -m 'Add amazing feature'`
+4. Запушь: `git push origin feature/amazing`
+5. Открой Pull Request
 
 ---
 
 ## 👤 Автор
+
 **Дмитрий Миронов** — Fullstack разработчик  
 🌐 [dmitrymironov.ru](https://dmitrymironov.ru)  
-🐙 [GitHub](https://github.com/dmironovru)  
+🐙 [GitHub](https://github.com/dmironovru)
 
-> Этот проект создан для демонстрации навыков работы с современными технологиями:  
+> Этот проект создан для демонстрации навыков работы с:  
 > **Go • Next.js • PostgreSQL • pgvector • Ollama • RAG-архитектура**
+```
