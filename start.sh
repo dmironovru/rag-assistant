@@ -106,7 +106,49 @@ cleanup() {
 }
 trap cleanup SIGINT SIGTERM
 
-# === Проверка зависимостей ===
+# ========================================
+# 0. ПРОВЕРКА DOCKER (добавлено!)
+# ========================================
+log "Проверка Docker..."
+if ! command -v docker >/dev/null 2>&1; then
+    error "Docker не установлен!"
+    echo ""
+    echo -e "${YELLOW}🔧 Установи Docker:${NC}"
+    echo -e "   ${GREEN}curl -fsSL https://get.docker.com | sh${NC}"
+    echo -e "   ${GREEN}sudo usermod -aG docker \$USER${NC}"
+    echo -e "   ${GREEN}newgrp docker${NC}"
+    exit 1
+fi
+info "Docker установлен ✅"
+
+if ! docker info >/dev/null 2>&1; then
+    error "Docker не запущен!"
+    echo ""
+    echo -e "${YELLOW}🔧 Запусти Docker:${NC}"
+    echo -e "   ${GREEN}sudo systemctl start docker${NC}"
+    exit 1
+fi
+info "Docker запущен ✅"
+
+if ! docker ps >/dev/null 2>&1; then
+    warn "Недостаточно прав для Docker!"
+    if groups $USER | grep -q docker; then
+        warn "Вы уже в группе docker, но изменения не применились."
+        echo -e "${YELLOW}🔄 Выполните: newgrp docker${NC}"
+        exit 1
+    else
+        warn "Добавляем пользователя $USER в группу docker..."
+        sudo usermod -aG docker $USER
+        info "Пользователь добавлен в группу docker ✅"
+        echo -e "${YELLOW}🔄 Выполните: newgrp docker && ./start.sh${NC}"
+        exit 0
+    fi
+fi
+info "Права Docker OK ✅"
+
+# ========================================
+# 1. ПРОВЕРКА ЗАВИСИМОСТЕЙ
+# ========================================
 log "Проверка зависимостей..."
 command -v go >/dev/null 2>&1 || { error "Go не установлен"; exit 1; }
 command -v node >/dev/null 2>&1 || { error "Node.js не установлен"; exit 1; }
@@ -114,7 +156,9 @@ command -v ollama >/dev/null 2>&1 || { error "Ollama не установлен: 
 command -v psql >/dev/null 2>&1 || { error "PostgreSQL не установлен"; exit 1; }
 info "Все зависимости найдены ✅"
 
-# === Проверка моделей ===
+# ========================================
+# 2. ПРОВЕРКА МОДЕЛЕЙ
+# ========================================
 log "Проверка ИИ-моделей..."
 if ! ollama list 2>/dev/null | grep -q "nomic-embed-text"; then
     warn "Модель nomic-embed-text не найдена. Скачиваю..."
@@ -126,7 +170,9 @@ if ! ollama list 2>/dev/null | grep -q "mistral:7b"; then
 fi
 info "Модели готовы ✅"
 
-# === Проверка/создание БД ===
+# ========================================
+# 3. ПРОВЕРКА БАЗЫ ДАННЫХ
+# ========================================
 log "Проверка базы данных..."
 if ! sudo -u postgres psql -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw rag_docs; then
     warn "База rag_docs не найдена. Создаю..."
@@ -137,13 +183,17 @@ else
     info "База данных найдена ✅"
 fi
 
-# === Проверка и освобождение портов ===
+# ========================================
+# 4. ПРОВЕРКА ПОРТОВ
+# ========================================
 log "Проверка портов..."
 free_port_interactive $BACKEND_PORT "Go-бэкенд" || exit 1
 free_port_interactive $FRONTEND_PORT "Next.js-фронтенд" || exit 1
 info "Порты готовы ✅"
 
-# === Запуск Ollama (если не запущен) ===
+# ========================================
+# 5. ЗАПУСК OLLAMA
+# ========================================
 if ! pgrep -f "ollama serve" >/dev/null; then
     step "Запуск Ollama..."
     ollama serve > "$LOG_DIR/ollama.log" 2>&1 &
@@ -160,7 +210,9 @@ else
     OLLAMA_STARTED_BY_US="false"
 fi
 
-# === Запуск бэкенда ===
+# ========================================
+# 6. ЗАПУСК БЭКЕНДА
+# ========================================
 step "Запуск Go-бэкенда..."
 cd "$BACKEND_DIR"
 export DB_CONN="postgres://rag:ragpass@localhost:5432/rag_docs"
@@ -188,15 +240,17 @@ for i in {1..5}; do
 done
 info "Бэкенд запущен (PID: $BACKEND_PID) ✅"
 
-# === Запуск фронтенда ===
+# ========================================
+# 7. ЗАПУСК ФРОНТЕНДА
+# ========================================
 step "Запуск Next.js-фронтенда..."
 cd "$FRONTEND_DIR"
 
-# 🔧 Чистим кэш, чтобы избежать ошибок "required-server-files.json"
+# Чистим кэш
 warn "Очистка кэша Next.js..."
 rm -rf .next
 
-# 🔧 Гарантируем установку зависимостей (локально, а не глобально!)
+# Установка зависимостей
 if [ ! -d "node_modules" ]; then
     step "Установка зависимостей npm (это может занять время)..."
     npm install --silent
@@ -205,13 +259,12 @@ fi
 export RAG_API_URL="http://localhost:$BACKEND_PORT/api/search"
 export OLLAMA_URL="http://localhost:11434/api/generate"
 
-# Запускаем dev-сервер
 npm run dev > "$LOG_DIR/frontend.log" 2>&1 &
 FRONTEND_PID=$!
 
-# 🔍 Ждём, пока фронтенд ДЕЙСТВИТЕЛЬНО начнёт отвечать на запросы
+# Ожидание готовности
 step "Ожидание готовности фронтенда..."
-for i in {1..30}; do  # 30 попыток по 1 сек = макс 30 сек ожидания
+for i in {1..30}; do
     if curl -s "http://localhost:$FRONTEND_PORT" >/dev/null 2>&1; then
         info "Фронтенд отвечает на порту $FRONTEND_PORT ✅"
         break
@@ -226,25 +279,29 @@ done
 
 info "Фронтенд запущен (PID: $FRONTEND_PID) ✅"
 
-# === Финальное сообщение ===
+# ========================================
+# 8. ФИНАЛЬНОЕ СООБЩЕНИЕ
+# ========================================
 echo ""
-echo -e "${GREEN}╔════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║  🚀 RAG Portfolio запущен!        ║${NC}"
-echo -e "${GREEN}╠════════════════════════════════════╣${NC}"
-echo -e "${GREEN}║  🌐 Открой: ${NC}http://localhost:$FRONTEND_PORT   ${GREEN}║${NC}"
-echo -e "${GREEN}║  🔌 Backend: ${NC}http://localhost:$BACKEND_PORT  ${GREEN}║${NC}"
-echo -e "${GREEN}║  🧠 Ollama:  ${NC}http://localhost:$OLLAMA_PORT ${GREEN}║${NC}"
-echo -e "${GREEN}╠════════════════════════════════════╣${NC}"
-echo -e "${GREEN}║  📋 Логи:                          ║${NC}"
+echo -e "${GREEN}╔══════════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}║  🚀 RAG Assistant запущен!                                     ║${NC}"
+echo -e "${GREEN}╠══════════════════════════════════════════════════════════════════╣${NC}"
+echo -e "${GREEN}║  🌐 Открой в браузере: http://localhost:$FRONTEND_PORT          ║${NC}"
+echo -e "${GREEN}║  🔌 Backend: http://localhost:$BACKEND_PORT                     ║${NC}"
+echo -e "${GREEN}║  🧠 Ollama:  http://localhost:$OLLAMA_PORT                     ║${NC}"
+echo -e "${GREEN}╠══════════════════════════════════════════════════════════════════╣${NC}"
+echo -e "${GREEN}║  📋 Логи:                                                       ║${NC}"
 echo -e "${GREEN}║  • backend:  $LOG_DIR/backend.log  ║${NC}"
 echo -e "${GREEN}║  • frontend: $LOG_DIR/frontend.log ║${NC}"
 echo -e "${GREEN}║  • ollama:   $LOG_DIR/ollama.log   ║${NC}"
-echo -e "${GREEN}╠════════════════════════════════════╣${NC}"
-echo -e "${GREEN}║  💡 Нажми ${NC}Ctrl+C${GREEN} для остановки  ║${NC}"
-echo -e "${GREEN}╚════════════════════════════════════╝${NC}"
+echo -e "${GREEN}╠══════════════════════════════════════════════════════════════════╣${NC}"
+echo -e "${GREEN}║  💡 Нажми Ctrl+C для остановки                                 ║${NC}"
+echo -e "${GREEN}╚══════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-# === Мониторинг процессов ===
+# ========================================
+# 9. МОНИТОРИНГ
+# ========================================
 log "Мониторинг сервисов (нажми Ctrl+C для остановки)..."
 while kill -0 $BACKEND_PID $FRONTEND_PID 2>/dev/null; do
     sleep 5
