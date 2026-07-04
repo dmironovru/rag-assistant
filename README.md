@@ -235,16 +235,6 @@ rag-assistant/
 
 ---
 
-## 🤝 Вклад в проект
-
-1. Форкни репозиторий
-2. Создай ветку: `git checkout -b feature/amazing`
-3. Закоммить: `git commit -m 'Add amazing feature'`
-4. Запушь: `git push origin feature/amazing`
-5. Открой Pull Request
-
----
-
 ## 👤 Автор
 
 **Дмитрий Миронов** — Fullstack разработчик  
