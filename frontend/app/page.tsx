@@ -1,12 +1,19 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Sparkles } from 'lucide-react';
+import { Send, Loader2, Sparkles, Upload, CheckCircle, FileText } from 'lucide-react';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   context?: string[];
+}
+
+interface UploadProgress {
+  fileName: string;
+  progress: number;
+  status: 'idle' | 'uploading' | 'processing' | 'complete' | 'error';
+  chunks?: number;
 }
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080';
@@ -21,6 +28,11 @@ export default function Home() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress>({
+    fileName: '',
+    progress: 0,
+    status: 'idle',
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -91,15 +103,35 @@ export default function Home() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Начинаем загрузку
     setIsUploading(true);
+    setUploadProgress({
+      fileName: file.name,
+      progress: 0,
+      status: 'uploading',
+    });
+
     const formData = new FormData();
     formData.append('file', file);
+
+    // Эмулируем прогресс загрузки (пока бэкенд не умеет отправлять прогресс)
+    const progressInterval = setInterval(() => {
+      setUploadProgress(prev => {
+        const newProgress = Math.min(prev.progress + 5, 95);
+        return {
+          ...prev,
+          progress: newProgress,
+        };
+      });
+    }, 200);
 
     try {
       const response = await fetch(`${BACKEND_URL}/api/upload`, {
         method: 'POST',
         body: formData,
       });
+
+      clearInterval(progressInterval);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -111,19 +143,51 @@ export default function Home() {
       const chunkCount = data.chunks ?? 0;
       const filename = data.filename || file.name;
 
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: `✅ Файл "${filename}" загружен и проиндексирован (${chunkCount} чанков). Теперь можно задавать вопросы по его содержимому!`,
-      }]);
+      // Завершаем с успехом
+      setUploadProgress({
+        fileName: filename,
+        progress: 100,
+        status: 'complete',
+        chunks: chunkCount,
+      });
+
+      // Добавляем сообщение в чат
+      setTimeout(() => {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `✅ Файл "${filename}" загружен и проиндексирован (${chunkCount} чанков). Теперь можно задавать вопросы по его содержимому!`,
+        }]);
+        setUploadProgress({
+          fileName: '',
+          progress: 0,
+          status: 'idle',
+        });
+        setIsUploading(false);
+      }, 800);
+
     } catch (error) {
+      clearInterval(progressInterval);
       console.error('Upload error:', error);
+      
+      setUploadProgress({
+        fileName: file.name,
+        progress: 0,
+        status: 'error',
+      });
+
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: `❌ Ошибка загрузки файла: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`,
       }]);
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+
+      setTimeout(() => {
+        setUploadProgress({
+          fileName: '',
+          progress: 0,
+          status: 'idle',
+        });
+        setIsUploading(false);
+      }, 3000);
     }
   };
 
@@ -136,9 +200,19 @@ export default function Home() {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="ml-auto px-4 py-2 rounded-lg bg-purple-900/50 text-purple-200 text-sm hover:bg-purple-900/70 transition disabled:opacity-50"
+            className="ml-auto px-4 py-2 rounded-lg bg-purple-900/50 text-purple-200 text-sm hover:bg-purple-900/70 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {isUploading ? 'Загрузка...' : '📄 Загрузить файл'}
+            {isUploading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Загрузка...
+              </>
+            ) : (
+              <>
+                <Upload className="w-4 h-4" />
+                Загрузить файл
+              </>
+            )}
           </button>
           <input
             ref={fileInputRef}
@@ -148,6 +222,43 @@ export default function Home() {
             className="hidden"
           />
         </div>
+
+        {/* Индикатор загрузки */}
+        {uploadProgress.status !== 'idle' && (
+          <div className="mb-4 p-4 rounded-lg bg-white/5 border border-white/10">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-purple-400" />
+                <span className="text-sm text-gray-300 truncate max-w-[200px]">
+                  {uploadProgress.fileName}
+                </span>
+              </div>
+              <span className="text-sm text-gray-400">
+                {uploadProgress.status === 'uploading' && `${Math.round(uploadProgress.progress)}%`}
+                {uploadProgress.status === 'processing' && '⏳ Индексация...'}
+                {uploadProgress.status === 'complete' && '✅ Готово!'}
+                {uploadProgress.status === 'error' && '❌ Ошибка'}
+              </span>
+            </div>
+            <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+              <div
+                className={`h-full transition-all duration-300 rounded-full ${
+                  uploadProgress.status === 'error'
+                    ? 'bg-red-500'
+                    : uploadProgress.status === 'complete'
+                    ? 'bg-green-500'
+                    : 'bg-purple-500'
+                }`}
+                style={{ width: `${Math.min(uploadProgress.progress, 100)}%` }}
+              />
+            </div>
+            {uploadProgress.status === 'complete' && uploadProgress.chunks !== undefined && (
+              <div className="mt-1 text-xs text-gray-400">
+                {uploadProgress.chunks} чанков проиндексировано
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="space-y-4 mb-4 max-h-[60vh] overflow-y-auto">
           {messages.map((message, idx) => (
@@ -195,6 +306,7 @@ export default function Home() {
             placeholder="Задайте вопрос..."
             className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 resize-none"
             rows={2}
+            disabled={isLoading}
           />
           <button
             onClick={sendMessage}
